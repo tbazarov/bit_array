@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 #include <stdexcept>
 
@@ -6,13 +8,13 @@ public:
     BitArray();
     ~BitArray();
 
-    BitArray(int size, unsigned long value = 0);
+    BitArray(int size_bits, unsigned long value = 0);
     BitArray(const BitArray& b);
 
     void swap(BitArray& b);
     BitArray& operator=(const BitArray& b);
 
-    void resize(int size, bool value = false);
+    void resize(int new_size, bool value = false);
     void clear();
     void push_back(bool bit);
 
@@ -35,23 +37,18 @@ public:
     BitArray operator~() const;
     int count() const;
 
-    //bool operator[](int i);
     bool operator[](int i) const;
-
-    // int size();
     int size() const;
-
     bool empty() const;
 
-    std::string to_string();
+    std::string to_string() const;
 
 private:
-    char* value;                         // Указатель на массив данных  
-    int size_bits;                       // Общее количество битов
-    int capacity;                      // размер зарезервированной памяти
+    char* value;        
+    int size_bits;      
+    int capacity;       
 
-    void allocate_memory(int size);
-    void copy_from(const BitArray& b);
+    void allocate_memory(int size_bits);
     void check_size_compatibility(const BitArray& b) const;
 };
 
