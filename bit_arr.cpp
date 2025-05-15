@@ -3,6 +3,31 @@
 #include <algorithm>
 #include <sstream>
 
+namespace
+{
+    const int BITS_PER_BYTE =  8;
+    const int CAPACITY_MULTIPLIER =  2;
+}
+
+namespace 
+{
+	inline int give_memory(int size_bits) 
+    {
+		return (size_bits + 7) / BITS_PER_BYTE;
+	}
+
+    inline int new_bytes_needed(int new_size)
+    {
+        return (new_size + BITS_PER_BYTE - 1) / BITS_PER_BYTE;
+    }
+
+    inline int current_bytes(int size_bits)
+    {
+        return (size_bits + BITS_PER_BYTE - 1) / BITS_PER_BYTE;
+    }
+
+}
+
 BitArray::BitArray() : value(nullptr), size_bits(0), capacity(0) {}
 
 BitArray::~BitArray() {
@@ -12,12 +37,13 @@ BitArray::~BitArray() {
 BitArray::BitArray(int size_bits, unsigned long value) {
     if (size_bits < 0) throw std::invalid_argument("Кол-во битов не может быть отрицательным");
     allocate_memory(size_bits);
-    for (int i = 0; i < size_bits && i < static_cast<int>(sizeof(unsigned long) * 8); ++i) {
+    for (int i = 0; i < size_bits && i < static_cast<int>(sizeof(unsigned long) * BITS_PER_BYTE); ++i) {
         set(i, (value >> i) & 1);
     }
 }
 
 BitArray::BitArray(const BitArray& b) : size_bits(b.size_bits), capacity(b.capacity) {
+    delete[] value;  
     if (capacity > 0) {
         value = new char[capacity];
         memcpy(value, b.value, capacity);
@@ -40,30 +66,39 @@ BitArray& BitArray::operator=(const BitArray& b) {
     return *this;
 }
 
+
+
 void BitArray::resize(int new_size, bool val) {
-    if (new_size < 0) throw std::invalid_argument("Размер не может быть отрицательным");
+    if (new_size < 0) {
+        throw std::invalid_argument("Размер не может быть отрицательным");
+    }
+    
     
     if (new_size <= size_bits) {
         size_bits = new_size;
         return;
     }
     
-    int needed_capacity = ((new_size + 7) / 8) * 2;
-    if (needed_capacity > capacity) {
-        char* new_value = new char[needed_capacity];
-        memset(new_value + capacity, 0, needed_capacity - capacity);
+    
+    if (new_bytes_needed(new_size) > capacity) {
+        char* new_value = new char[new_bytes_needed(new_size)](); 
+        
         if (value) {
-            memcpy(new_value, value, capacity);
+            memcpy(new_value, value, current_bytes(size_bits));
             delete[] value;
         }
+        
         value = new_value;
-        capacity = needed_capacity;
+        capacity = new_bytes_needed(new_size);
     }
     
-    for (int i = size_bits; i < new_size; ++i) {
+    for (int i = size_bits; i < new_size; ++i) 
+    {
         set(i, val);
     }
+
     size_bits = new_size;
+        
 }
 
 void BitArray::clear() {
@@ -76,7 +111,7 @@ void BitArray::push_back(bool bit) {
 
 BitArray& BitArray::operator&=(const BitArray& b) {
     check_size_compatibility(b);
-    for (int i = 0; i < (size_bits + 7) / 8; ++i) {
+    for (int i = 0; i < (size_bits + 7) / BITS_PER_BYTE; ++i) {
         value[i] &= b.value[i];
     }
     return *this;
@@ -84,7 +119,7 @@ BitArray& BitArray::operator&=(const BitArray& b) {
 
 BitArray& BitArray::operator|=(const BitArray& b) {
     check_size_compatibility(b);
-    for (int i = 0; i < (size_bits + 7) / 8; ++i) {
+    for (int i = 0; i < (size_bits + 7) / BITS_PER_BYTE; ++i) {
         value[i] |= b.value[i];
     }
     return *this;
@@ -92,7 +127,7 @@ BitArray& BitArray::operator|=(const BitArray& b) {
 
 BitArray& BitArray::operator^=(const BitArray& b) {
     check_size_compatibility(b);
-    for (int i = 0; i < (size_bits + 7) / 8; ++i) {
+    for (int i = 0; i < (size_bits + 7) / BITS_PER_BYTE; ++i) {
         value[i] ^= b.value[i];
     }
     return *this;
@@ -108,7 +143,7 @@ BitArray& BitArray::operator<<=(int n) {
     for (int i = 0; i < size_bits - n; ++i) {
         set(i, operator[](i + n));
     }
-    for (int i = size_bits - n; i < size_bits; ++i) {
+    for (int i = std::max(size_bits - n, 0); i < size_bits; ++i) {
         reset(i);
     }
     return *this;
@@ -124,7 +159,7 @@ BitArray& BitArray::operator>>=(int n) {
     for (int i = size_bits - 1; i >= n; --i) {
         set(i, operator[](i - n));
     }
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n && i < size_bits; ++i) {
         reset(i);
     }
     return *this;
@@ -144,8 +179,8 @@ BitArray BitArray::operator>>(int n) const {
 
 BitArray& BitArray::set(int n, bool val) {
     if (n < 0 || n >= size_bits) throw std::out_of_range("Выход за границу");
-    int char_index = n / 8;
-    int bit_index = n % 8;
+    int char_index = n / BITS_PER_BYTE;
+    int bit_index = n % BITS_PER_BYTE;
     if (val) {
         value[char_index] |= (1 << bit_index);
     } else {
@@ -155,7 +190,7 @@ BitArray& BitArray::set(int n, bool val) {
 }
 
 BitArray& BitArray::set() {
-    memset(value, 0xFF, (size_bits + 7) / 8);
+    memset(value, 0xFF, (size_bits + 7) / BITS_PER_BYTE);
     return *this;
 }
 
@@ -164,12 +199,12 @@ BitArray& BitArray::reset(int n) {
 }
 
 BitArray& BitArray::reset() {
-    memset(value, 0, (size_bits + 7) / 8);
+    memset(value, 0, (size_bits + 7) / BITS_PER_BYTE);
     return *this;
 }
 
 bool BitArray::any() const {
-    for (int i = 0; i < (size_bits + 7) / 8; ++i) {
+    for (int i = 0; i < (size_bits + 7) / BITS_PER_BYTE; ++i) {
         if (value[i]) return true;
     }
     return false;
@@ -181,7 +216,7 @@ bool BitArray::none() const {
 
 BitArray BitArray::operator~() const {
     BitArray result(*this);
-    for (int i = 0; i < (size_bits + 7) / 8; ++i) {
+    for (int i = 0; i < (size_bits + 7) / BITS_PER_BYTE; ++i) {
         result.value[i] = ~value[i];
     }
     return result;
@@ -197,8 +232,8 @@ int BitArray::count() const {
 
 bool BitArray::operator[](int i) const {
     if (i < 0 || i >= size_bits) throw std::out_of_range("Выход за границу");
-    int char_index = i / 8;
-    int bit_index = i % 8;
+    int char_index = i / BITS_PER_BYTE;
+    int bit_index = i % BITS_PER_BYTE;
     return (value[char_index] >> bit_index) & 1;
 }
 
@@ -220,7 +255,7 @@ std::string BitArray::to_string() const {
 
 void BitArray::allocate_memory(int size_bits) {
     this->size_bits = size_bits;
-    capacity = ((size_bits + 7) / 8) * 2;
+    capacity = ((size_bits + 7) / BITS_PER_BYTE) * CAPACITY_MULTIPLIER;
     value = new char[capacity];
     memset(value, 0, capacity);
 }
